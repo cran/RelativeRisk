@@ -1,0 +1,8 @@
+as.twolevel             Changes varibles to two levels   
+est.rr                  Estimates relative risks
+tally.data              Tallies data into strata
+to.rr                   Translates odds ratios to relative risks
+to.or                   Translates relative risks to odds ratios
+as.afactor				Changes variables to factors
+
+
