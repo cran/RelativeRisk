@@ -98,6 +98,46 @@ tolJack<-2 # tollerance comparing jackknife coef with logistic -- to detect big 
 		data
 	}
 
+	# gets names for the levels
+	get.level.names<-function(data){
+		fac<-get.factors(data)
+		cnames<-colnames(data)
+		levs<-list(start=0)
+		if (any(fac)){
+			n<-length(fac)
+			levs<-list(start=n)
+			for (i in 1:n) {
+				theLevs<-levels(data[,i])
+				m<-length(theLevs)
+				levs<-c(levs,list(ab=theLevs[1:(m-1)]))
+				names(levs)[i+1]<-cnames[i]
+			}
+
+		}
+
+		levs		
+	}
+
+	# Returns column names with factor levels set to actual levels
+	get.colnames<-function(data,levNames) {
+		colNames<-colnames(data)
+		if (levNames[[1]]==0)  return(colNames) # there are no factors
+		colNames<-paste(colNames,collapse=",")
+		colNames<-paste(colNames,",",sep="")
+		n<-length(levNames)
+		for (i in 2:n) {
+			nameString<-levNames[[i]]
+			m<-length(nameString)
+			for(j in 1:m) {
+				aName<-names(levNames[i])
+				patName<-paste(aName,j,sep="")
+				repName<-paste(aName,"(",nameString[j],")",sep="")
+				colNames<-gsub(patName,repName,colNames)
+			}
+		}
+		unlist(strsplit(colNames,",",fixed=TRUE))
+	}
+
 
 	# runs glm with options changes. In particular it sets the contrasts to contr.treatment with base as the last row
 	run.glm<-function(frml,data,link,wts,start) {
@@ -272,14 +312,11 @@ tolJack<-2 # tollerance comparing jackknife coef with logistic -- to detect big 
 			stop(val$log)
 #EXIT
 		}
-
 		tal<-as.data.frame(tal) 
 	} else {
 		tal<-data
 	}
-
 	tal<-set.contr(tal)
-
 	# remove any data with (0,0) for response
 	if (ncol(yVal)==2) {
 		zeros<-apply(yVal==0,1,all)
@@ -289,8 +326,8 @@ tolJack<-2 # tollerance comparing jackknife coef with logistic -- to detect big 
 			result<-addResult(paste(sum(zeros)," rows were removed because response had all zeros."))
 		}
 	}
-
 # ******************** find limit
+	levNames<-get.level.names(tal)
 	frmlT<-replaceResp(frml,"")
 	dmT<-model.matrix(frmlT,tal)
 	limit<-matrix(0,ncol(dmT),2)
@@ -298,9 +335,7 @@ tolJack<-2 # tollerance comparing jackknife coef with logistic -- to detect big 
 	limit[,2]<-apply(dmT,2,min)
 	rng<-limit[,1]-limit[,2]
 	rng[1]<-1
-	colNames<-colnames(dmT) 
-	dmT<-0 # save memory
-
+	colNames<-get.colnames(dmT,levNames)
 #***************************** Run glm() with logit link to get start for log link and for to.rr() if log fails 
 	frml<-replaceResp(frml,"yVal")
 	glmLogit<-run.glm(frml,tal,"logit") # Do this using yVal
@@ -353,7 +388,6 @@ tolJack<-2 # tollerance comparing jackknife coef with logistic -- to detect big 
 			}
 			scalConst<-sqrt(modConstant) # const to scale SD
 		}
-
 		if (class(glmOut)[1]!="try-error") { # glm worked, so summarize and return
 			sumry<-summary.glm(glmOut)$coefficients
 			coef<-sumry[,1]*rng
@@ -372,7 +406,6 @@ tolJack<-2 # tollerance comparing jackknife coef with logistic -- to detect big 
 		glmOut<-glmLogit
 	}
 # ******************************* Do transformed logit
-
 	if (!missing(theta)) {
 		if (ncol(yVal)<2) {
 			stop("The Response must have two columns: set doTally=TRUE")

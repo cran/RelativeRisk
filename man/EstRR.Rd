@@ -44,6 +44,10 @@
 	This function estimates relative risks from either prospective or
 	retrospective data. It should never fail to produce an
 	estimate. It may however fail to return confidence intervals.
+
+	A vignette giving further details is availble. To access it, type
+	
+	vignette("RelativeRisk")
 	
 	If \code{doLog==TRUE}, it first attempts to estimate relative risks
 	using \code{glm()} with a log link. If \code{glm()} fails,
@@ -109,7 +113,7 @@
 	\eqn{theta=(1-P)/P}. \code{doTally} should be set to \code{TRUE} in order to produce
 	a response with two columns (case, control). The estimates
 	are fairly robust to misspecification of theta. The only time a modest theta
-	will have much effect, is when the cases greatly out number the controls.
+	will have much effect, is when the cases greatly outnumber the controls.
 
 	
       }
@@ -137,6 +141,7 @@
        Paper 293. University of Washington. \url{http://www.bepress.com/uwbiostat/paper293}
 }
 \examples{
+
 	data(gradData)
 	aa<-est.rr(Count|Admitted~.,data=gradData,indexed=TRUE)
 	names(aa)
@@ -176,6 +181,11 @@
 	data(simData)
 	aa<-est.rr(Success|Failure~.,data=simData,theta=2.2)
 	aa$table
+
+        # Very large odds raio:
+        data(Melanoma)
+        aa<-est.rr(NarrowExc|WideExc~.,Melanoma)
+        aa$table
 
 
 }

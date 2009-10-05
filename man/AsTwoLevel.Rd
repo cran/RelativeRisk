@@ -2,7 +2,7 @@
 \alias{as.twolevel}
 \title{As two level}
 \description{
- Changes columns of a data frame into two level vectors
+ Changes a column of a data frame into a vector with levels 0 and 1.
 }
 \usage{
 	as.twolevel(cName,data,levs)
@@ -10,12 +10,12 @@
 
 \arguments{
 	\item{cName}{The quoted column name to change}
-	\item{data}{A data frame. }
+	\item{data}{A matrix or data frame. }
 	\item{levs}{A vector of levels. All variable values that are in
-	  levels will be changed to 0, and all others to 1.}
+	  levs will be changed to 0, and all others to 1.}
 }
 \value{
-	A data matrix with changes in column cName.
+	A data frame with changes in column \code{Name}.
 }
 
 

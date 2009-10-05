@@ -1,0 +1,272 @@
+\documentclass[12pt]{article}
+\usepackage{Sweave}
+\usepackage{natbib}
+\textwidth=16cm
+\textheight=24cm
+\parskip=0.3cm
+\topsep=0cm
+\oddsidemargin=0cm
+\topmargin=-0.3cm
+\headsep=0cm
+\headheight=0cm
+\columnsep=0.5cm
+
+\author{Robert E. Wheeler\\ECHIP, Inc.
+}
+%%\date{}
+\title{Relative Risk Calculations in R}
+
+\begin{document}
+
+ %\VignetteIndexEntry{Using RelativeRisk} 
+ %\VignetteDepends{RelativeRisk}
+
+\maketitle
+
+\begin{abstract}
+This package computes relative risks for both prospective and retrospective samples using GLM and Logit-Log transformations. It will always produce relative risk estimates, although it may fail sometimes to produce confidence intervals.
+\end{abstract}
+
+
+
+
+
+\section[Introduction]{Introduction}
+Calculating relative risks with GLM is full of misery. Too often an attractive set of data will be regurgitated by estimating software, with words that can be understood only by a high priest of numericity. This package attempts to ease these difficulties, by providing some automated calculations that will always produce estimates, and usually confidence intervals. The appropriate model for relative risk is the log model, shown in equation (\ref{eq:log}). In this model, the exponentials of the coefficients are relative risks. See section (\ref{sec:logit-log}), for details. The workhouse program {\tt glm()} is used to estimate relative risk for the log model  by using it in a variety of ways. It is used first with the Logit-Log starting values described in section (\ref{sec:logit-log}), which closely resemble the correct values. If this fails, {\tt glm()} is run without starting values. If this fails, the data is modified, as described in section (\ref{sec:convergence}), and {\tt glm()} is run both with and without starting values. If this fails, the Logit-Log estimates are reported together with confidence intervals obtained by a  jackknife. 
+
+
+
+This paper describes the methodologies used in this package, and illustrates its functionality with a few examples.
+
+
+\section[Examples]{Simple Example}
+It's always good to start with a simple example. The data  is the Berkeley graduate admissions data set, available as a standard data set in R. 
+
+The R command to analyze this data is as follows.  
+
+
+<<example>>=
+library(RelativeRisk)
+data(gradData)
+aa<-est.rr(Count|Admitted~Dept*Male,gradData,indexed=TRUE)
+aa$table
+
+
+@
+
+
+
+
+
+This output displays the ratio of two proportions in the {\tt rr} column. The first five rows show the proportion of admissions for the 
+various departments with respect to the admission proportion for Department 6. Such proportion ratios are of course ``relative risks,'' 
+which are always less extreme than ``odds ratios,'' as is illustrated by comparing the first and last columns\footnote{The {\tt Dept(4):Male} row is a numerical aberration}. The seventh row shows 
+that the proportion of admissions for males is only 84\% of that for females.  The other rows suggest Simpson's paradox,  since the 
+admissions of males for most departments is higher than that for females, yet the overall admission of males is less.
+
+
+\section{convergence}
+\label{sec:convergence}
+
+Convergence is not always assured for GLM with the log link:  a major problem with Newton like methods is the presence of zeros in the data. The easiest way to understand the difficulty is by contrasting the logistic and log models. The logistic model assumes that a probability $p$ is related to the environmental variable vector $x$  by the model:
+
+\begin{equation}
+logit(p)=\log(\frac{p}{1-p})=\beta_0+\beta'x,
+\label{eq:logistic}
+\end{equation}
+
+\noindent while the log model assumes
+
+\begin{equation}
+\log(p)=\beta_0+\beta'x.
+\label{eq:log}
+\end{equation}
+
+If $l$ is the binomial  likelihood, then estimates are obtained by setting its derivative equal to zero: 
+\begin{equation}
+\frac{\partial l}{\partial\beta_r}=\sum_{i} \frac{\partial p_i}{\partial \beta_r}\frac{(y_i-m_i p_i)}{p_i(1-p_i)}=0,
+\label{eq:likelihood}
+\end{equation}
+
+\noindent where  $y_i$ is the binomial response with index $m_i$. 
+
+For the logistic model, $\frac{\partial p_i}{\partial \beta_r}=x_i p_i(1-p_i)$, so that equation (\ref{eq:likelihood}) becomes
+
+\begin{displaymath}
+\frac{\partial l}{\partial\beta_r}=\sum_{i} (y_i-m_i p_i)x_i=0,
+\end{displaymath}
+
+\noindent while for the log mode, $\frac{\partial p_i}{\partial \beta_r}=x_i p_i$ , equation (\ref{eq:likelihood}) becomes
+
+\begin{displaymath}
+\frac{\partial l}{\partial\beta_r}=\sum_{i} \frac{(y_i-m_i p_i)}{(1-p_i)}x_i=0.
+\end{displaymath}
+
+ If $p_i$ is near unity, the ith summand in the likelihood summation becomes large, which places undue emphasis on it and makes convergence difficult. Estimation for the logistic model suffers from no such problem.
+
+There have been a number of solutions offered for this problem. They are summarized in \cite{Lumley}. The solution used in this package has the flavor of a continuity correction, which is achieved by inflating the counts and adding 1 where there are zeros. In particular, if the $m_i$ are all unity, then the Bernoulli response $y_i$ is replaced by a two column matrix with entries  $[(y_iK+(1-y_i)),y_i+K(1-y_i)]$, where the columns denote ``reaction'' and ``no reaction,''  and $K$ is some large number: the default is 1000. If $m_i$ is not unity, the binomial data will require two columns, and the counts in both columns are multiplied by $K$ and zeros are replaced by unities. This modification does not change the scale of the estimates, but it inflates the log likelihood  and deflates the variances by $K$.  The estimates converge to the correct values as $K$ increases, but for any finite $K$, the estimates are slightly biased.
+
+
+
+
+\section{Retrospective Data}
+\label{sec:retrospect}
+
+There is less difference between the analyses of prospective and retrospective data than is generally supposed. Prospective data, of course, is data collected on a fixed sets of subjects, say those treated and untreated, and the response is the proportion reacting. Retrospective data is collected for subjects who have reacted and the response is the proportion who fall in the treated or untreated categories. When the reaction is infrequent, the odds ratio and the relative risk are approximately equal, but when the reaction is not rare, these statistics differ. The odds ratio is not affected by the retrospective sample sizes, which is not true for the crude estimate of relative risk that may be calculated from retrospective samples. This has led many to prefer the odds ratio as a summary statistic. A better estimate of relative risk may be obtained by taking into account the marginal frequency of the reaction in the population, and this estimate is not affected by the retrospective sample sizes.
+
+\cite[p203]{Breslow}have given an argument leading to an estimate of relative risk conditional on the sampled individuals. A more interesting argument in the same pattern may be obtained by considering the marginal frequencies of the reaction in the population. For retrospective sampling, suppose that the ``cases'' are a random sample from the population of reactors and that the marginal probability of reactors is $\phi$, and suppose that the ``controls'' are also randomly selected from the remainder of the population, and that marginal probability is $1-\phi$.  If $P(X|C)$  and $P(X|\tilde{C})$ are the conditional probabilities of the environmental vector $X$, given case and control, respectively, then it follows via a Bayes argument using $P(X|C)\phi=pP(X)$, that 
+
+\begin{displaymath}
+p=\frac{P(X|C)}{P(X|C)+P(X|\tilde{C})\theta},
+\end{displaymath}
+
+\noindent where $\theta=(1-\phi)/\phi$. If $n_C$ and $n_{\tilde{C}}$ are the case and control samples sizes and $a$ and $b$ counts for $X$, then $P(X|C)$ is estimated by $a/n_C$, and $P(X|\tilde{C})$ by $b/n_{\tilde{C}}$, and one has the estimate
+
+\begin{displaymath}
+\hat{p}=\frac{a}{a+b\theta n_r},
+\end{displaymath}
+
+\noindent where $n_r=n_C/n_{\tilde{C}}$. This is clearly unaffected by scaling -- increasing $n_{\tilde{C}}$ also increases $b$.
+
+It follows from the above that retrospective data may be analyzed by multiplying the control samples by $\theta n_r$. 
+
+An interesting thing about this estimate is the relative unimportance of $\theta$. If $\theta$ is large, as it is when the reaction is rare, then relative risk and odds ratios are essentially the same. If $\theta$ is small, say in the 2 to 10 range, corresponding to $\phi$'s from 1/3 to 1/11, then the relative risk estimates are very close to the crude estimates from the retrospective data.
+
+
+\section{Logit-Log translations}
+\label{sec:logit-log}
+
+It is possible to translate the coefficients of the logistic and log models from one to the other by setting all variables but one to zero and equating the expressions for $p$. To distinguish the coefficients in the two models, rewrite equation (\ref{eq:log}) as 
+
+\begin{equation}
+\log(p)=\alpha_0+\alpha'x.
+\label{eq:loga}
+\end{equation}
+
+The exponential of the coefficients in this model are relative risks when the variables are coded (0,1), and the exponentials of the coefficients in equation (\ref{eq:logistic}) are odds ratios for the same coding. This may be seen by subtracting the models differing in the levels of one variable only. When the variables are coded $(\rho_l, \rho_u)$, the odds ratio is $\exp(\rho \beta_i)$ and the relative risk is $\exp(\rho_u\alpha_i)$, where $\rho=\rho_u-\rho_l$.
+
+Setting all variables but one to zero and equating the models gives:
+
+\begin{equation}
+\exp(\rho \alpha_i)=\exp(\rho \beta_i) \frac{1+\exp(\beta_0+\rho_l \beta_i)}{1+\exp(\beta_0+\rho_u\beta_i)},
+\label{eq:torr}
+\end{equation}
+
+\noindent and the reverse translation:
+
+\begin{equation}
+\exp(\rho\beta_i)=\exp(\rho \alpha_i) \frac{1+\exp(\alpha_0+\rho_l \alpha_i)}{1+\exp(\alpha_0+\rho_u\alpha_i)}.
+\label{eq:toor}
+\end{equation}
+
+\noindent These are not mathematical inverses. Equation (\ref{eq:torr}) is not the reciprocal of equation (\ref{eq:toor}), which can 
+lead to small numerical differences when the output of one is input into the other.  For example,  {\tt to.rr()} is the implementation of equation (\ref{eq:torr}) and {\tt to.rr()} is the implementation of equation (\ref{eq:toor}), and using these with the default variable limits of $(0,1)$ gives
+
+<<>>==
+
+to.rr(to.or(c(.3,1.5,2,.7,.3)))
+
+@
+\noindent while using them with the limits $(1,-1)$ gives
+
+<<>>==
+
+round(to.rr(to.or(c(.3,1.5,2,.7,.3),limit=c(1,-1)),limit=c(1,-1)),3)
+
+@
+
+\noindent The true relative risks are of course (0.3,1.5,2.0,0.7,0.3).
+
+ For retrospective data, one simply replaces the unity in the numerator and denominator by $\theta n_r$: see section (\ref{sec:retrospect}) for the definition of these parameters.
+
+The relative risks estimates are biased, but their biases are much smaller than those for odds ratios. These estimates will be calculable so long as is the logistic model: they are most useful for providing starting values for GLM calculations and as a backup when all else fails. The jackknife \cite{Miller} works well for estimating confidence intervals even for small numbers of strata. It of course fails  when removing a stratum results in  a singularity. 
+
+\section{Data Input}
+
+The package attempts to accommodate most types of input that are expressed in matrix form, with observations as rows and columns as variables. The response may be either a single column of $(0,1)$ values, a pair of columns denoting ``reaction'' and ``no reaction," or a column of counts with an auxiliary variable to indicate ``reaction'' and ``no reaction.'' The columns may be external to the function or in the matrix of data input to the function.  For retrospective data, two columns are required, one for ``case'' and one for ``control.'' The {\tt tally.data()} function will process the data into two columns, according to strata as defined by the values of the other variables in the data. Needless to say, variables with a great many levels will produce a great many strata. 
+
+\section[Examples]{Examples}
+
+The {\tt Chocolate} dataset gives consumer preferences for chocolate additions. It has a single response, {\tt prefer} which assumes two values, 1 for preference and 0 for not. Ten subjects were presented with eight bars made up of all possible combinations of four ingredients, and asked their preferences. The analysis is
+
+<<>>==
+data(Chocolates)
+est.rr(prefer~.,Chocolates)$table
+
+
+@
+ 
+\noindent which indicates the the subjects preferred hard, dark, nutty chocolates.  The {\tt subjects} variable is not very informative because it has 10 levels. This variable would be more informative if one could compare the individual subjects, which can be done by making it a factor. Factors use {\tt contr.treatment()} with the last level set as the base; hence, the output shows relative risks of each level with respect to the last level. 
+
+<<>>==
+ac<-as.afactor("Subject",Chocolates)
+est.rr(prefer~.,ac)$table
+
+@
+
+To change the base level, {\tt as.afactor()} may be used. Thus to make the second subject the base, redefine the levels:
+
+<<>>==
+ac<-as.afactor("Subject",Chocolates,levOrder=c(1,3:10,2))
+est.rr(prefer~.,ac)$table
+
+@
+
+One can also reverse the preference  variable by using the function {\tt as.twolevel}. 
+
+<<>>=
+ac<-as.twolevel("prefer",ac,1)
+est.rr(prefer~.,ac)$table
+
+@
+
+\noindent which shows the relative risks for not prefer.
+
+More commonly the response will have two columns. The columns may contain counts, as in the {\tt simData} dataset, where the columns represent ``success'' and ``failure.'' One analysis of this dataset is
+
+<<>>==
+data(simData)
+est.rr(Success|Failure~.,data=simData)$table
+
+@
+
+Another analysis of this dataset might take into account that it is a case-control sample, with 600 cases and 400 controls. In the general population, 31\% fall into the case category, thus the appropriate parameter for analysis is {\tt theta=2.2}. 
+
+<<>>==
+
+est.rr(Success|Failure~.,data=simData,theta=2.2)$table
+@
+
+\noindent which, among other things, suggests that there is less difference that ordinarily supposed between prospective and retrospective analyses for case-control data -- the case-control sample size ratio is $600/400$ or 150\% as opposed to 31\% for the population, which are substantially different, and yet the conclusions about significance that would be drawn from the relative risk estimates are the same in the two analyses. This dataset is the output of a simulation, in which the true relative risks were {\tt (0.3,1.5,2,.7,.3)}.
+
+Another type of two column response, contains counts in one column and an indicator variable in the second column. The indicator variable is used to divide the counts into ``success'' and ``failure'' columns. Counts of the survivors of the Titanic shipwreck illustrate this point. Here the variable {\tt survived} is used to index the counts in the {\tt count} column. The fact that this second column is an index column is signaled by setting the parameter {\tt indexed} to {\tt TRUE}. 
+
+<<>>==
+data(TitanicMat)
+aa<-est.rr(count|survived~.,indexed=TRUE,data=TitanicMat)
+aa$log
+aa$table
+
+@
+
+The log shows the progress of the calculations. In this case, the GLM calculation was successful, even thought two rows of the data were eliminated. The results indicate that the probability of survival for males was about half that of females, and adults about 87\% of children. The probability of survival for first and second class passengers was greater than that of the crew. 
+
+
+
+One can reverse the relative risk values by changing the order of the levels for a factor. The ``sex'' factor levels in the above analysis are {\tt ("Male","Female")}. To change the order use {\tt as.afactor()} as follows:
+
+<<>>==
+TitanicMatR<-as.afactor("sex",TitanicMat,levOrder=c("Female","Male"))
+est.rr(count|survived~.,indexed=TRUE,data=TitanicMatR)$table
+@
+
+\noindent Because of two missing rows, GLM was unable to solve the equations with the reversed levels, and the jackknife was unable to calculate confidence intervals, so the Logit-Log estimates are shown. The ``sex'' factor was, however, reversed as desired.
+
+
+\bibliographystyle{plainnat}
+\bibliography{RelativeRisk}
+
+
+
+\end{document}
+

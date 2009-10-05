@@ -72,6 +72,7 @@ function(sName,fName,indexName,data,sigDigits=2){
 	}
 
 # toNumericVectors ###################
+# All vectors must be numeric
 # Changes factors to vectors and  character vectors to numeric
 # argument names may be numerical but coded as character, so change these to numeric
 
@@ -79,52 +80,80 @@ function(sName,fName,indexName,data,sigDigits=2){
 		n<-ncol(data)
 		colNames<-colnames(data)
 		for (i in 1:n) {
-			if (is.factor(data[,i])) {
-				data[,i]<-as.vector(data[,i])
+			b<-data[,i]
+			aFactor<-is.factor(b)
+			if (aFactor) {
+				levs<-levels(b)
+				b<-as.vector(b)
 			}
 			if (any(colNames[i]==argNames)) {
-				if (is.character(data[,i])) {
-					data[,i]<-as.numeric(data[,i])
+				if (is.character(b)) {
+					b<-as.numeric(b)
 				}
-			} else
-			if (is.character(data[,i])) {
+			} 
+			if (is.character(b)) {
 				a<-data[,i]
-				b<-rep(0,length(a))
-				un<-unique(a)
+				a<-rep(0,length(b))
+				if (aFactor)  # use the original level sequence
+					un<-levs
+				else 
+					un<-unique(b)
+
 				for (j in 1:length(un)) {
-					b[a==un[j]]<-j-1# note the coding of characters starts at 0
+					a[b==un[j]]<-j 
 				}
-				data[,i]<-b
+				b<-a
 			}
+			data[,i]<-b
 		}
+		colnames(data)<-colNames
 		data
 	}
 
-# Makes a vector indicating factor type
-# 0 no factor, 1 factor, 2 ordered factor
-
-	getFactors<-function(data) {
-		#apply(data,2,is.factor) doesn't work
+# Returns a vector with TRUE for factors in data
+	get.factors<-function(data) {
 		n<-ncol(data)
 		vec<-rep(FALSE,n)
 		for (i in 1:n) {
-			if (is.ordered(data[,i])) vec[i]<-2
-			else if (is.factor(data[,i])) vec[i]<-1
-			else vec[i]<-0
+			if (is.factor(data[,i])) vec[i]<-TRUE
 		}
 		names(vec)<-colnames(data)
 		vec
 	}
 
-# creates factors
-makeFactors<-function(data,fType) {
+# gets levels
+	get.levels<-function(data){
+		fac<-get.factors(data)
+		cnames<-colnames(data)
+		levs<-list(start=0)
+		if (any(fac)){
+			levNames<-cnames[fac]
+			n<-length(levNames)
+			levs<-list(start=n)
+			for (i in 1:n) {
+				theLevs<-unique(levels(data[,levNames[i]]))
+				levs<-c(levs,list(ab=theLevs))
+				names(levs)[i+1]<-levNames[i]
+			}
 
-	n<-ncol(data)
-	for (i in 1:n) {
-		if (fType[i]==2) data[,i]<-factor(data[,i],ordered=TRUE)
-		else if (fType[i]==1) data[,i]<-factor(data[,i])
+		}
+
+		levs		
 	}
-	data
+
+
+# creates factors
+makeFactors<-function(mat,fType,fLevs) {
+
+	n<-ncol(mat)
+	for (i in 1:n) {
+		if (fType[i]) {
+			nm<-names(fType[i])
+			lst<-fLevs[[nm]]
+			mat[,i]<-factor(lst[mat[,i]],levels=lst)
+		} 
+	}
+	mat
 }
 
 # colType ##############################3
@@ -141,7 +170,6 @@ makeFactors<-function(data,fType) {
 ################################################
 ### Calculations start here
 
-
 	if (!inherits(data,"data.frame")) {
 		dataNames<-colnames(data)
 		data<-data.frame(data)   # make sure it is a data frame
@@ -157,23 +185,23 @@ makeFactors<-function(data,fType) {
 
 	responseType<-"Single" 
 
-	if (missing(fName)) {
-		fName<-paste("not",sName,sep="_") # used only for output decoration
-	}
-	else {
+	outNames<-c(sName,paste("not",sName,sep="_"))
+	if (!missing(fName)) {
 		eVars<-eVars[eVars!=fName]
 		argNames<-c(argNames,fName)
 		responseType<-"Double"
+		outNames<-c(sName,fName)
 	}
-
 	if (missing(indexName)) {
 		indexName<-NA
 	} else {
 		eVars<-eVars[eVars!=indexName]
+		argNames<-c(argNames,indexName)
 		responseType="Count"
+		outNames<-c(indexName,paste("not",indexName,sep="_"))
 	}
-	fType<-(getFactors(data))[eVars] # 0 not a factor, 1 a factor, 2 ordered factor 
-
+	fType<-(get.factors(data))[eVars] 
+	fLevs<-get.levels(data)
 	data<-toNumericVectors(data,argNames) 
 	#data<-data.matrix(data) Not used because it can't deal with character vectors
 
@@ -191,7 +219,11 @@ makeFactors<-function(data,fType) {
 	}
 
 	# remove any row with NA
-	miss<-apply(is.na(data[,eVars]),1,any)
+	if (length(eVars==1)) {
+		miss<-is.na(data[,eVars])	# apply doesn't seem able to handle a single column
+	} else {
+		miss<-apply(is.na(data[,eVars]),1,any)
+	}
 	if (any(miss)) {
 		data<-data[!miss,]
 	}
@@ -224,11 +256,13 @@ makeFactors<-function(data,fType) {
 	nn<-nn/m
 
 	mat<-matrix(unlist(lst),nn,m,byrow=TRUE)
-	colnames(mat)<-c(sName,paste("not",sName,sep="_"),eVars)
 	y<-mat[,1:2]
+	y<-matrix(as.numeric(y),nn,2)
+#	colnames(y)<-c(sName,paste("not",sName,sep="_"))
+	colnames(y)<-outNames
 	mat<-mat[,-(1:2)]
 	mat<-as.data.frame(mat)
-	colnames(mat)<-eVars # sometimes the names are lost
-	mat<-makeFactors(mat,fType)
+	colnames(mat)<-eVars 
+	mat<-makeFactors(mat,fType,fLevs)
 	return(list(log="All OK",Y=y,X=mat))
 }
